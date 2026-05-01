@@ -37,4 +37,8 @@ Config.Boot = {
     applySeconds  = 5,
     removeSeconds = 5,
     defaultFine   = 500,
+    propModel     = 'imp_prop_impexp_wheel_clamp_01a',
+    policeJobs    = { 'police', 'sasp', 'sheriff' },
+    cachePollSec  = 2,
+    streamRadius  = 80.0,
 }
