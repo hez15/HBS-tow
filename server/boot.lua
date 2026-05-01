@@ -26,7 +26,10 @@ local function loadBoots()
     print(('[hbs-tow] loaded %d active boots'):format(#rows))
 end
 
-CreateThread(loadBoots)
+CreateThread(function()
+    HBS_TOW_AwaitMigrations()
+    loadBoots()
+end)
 
 local function applyBoot(plate, leoCid, fine, reason)
     plate = normalizePlate(plate)
