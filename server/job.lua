@@ -1,4 +1,4 @@
--- Tow job server: mission generation, claim/payout, XP, stats, history.
+-- Tow job server: mission generation, claim/payout, XP, stats, history, scene flavor.
 
 local nextCallId    = 1
 local activeCalls   = {}    -- callId -> call
@@ -93,19 +93,42 @@ lib.callback.register('hbs-tow:server:listCalls', function(src)
     return out
 end)
 
-local function decorateForVariant(entity, variant)
-    SetVehicleDoorsLocked(entity, 2)
-    if variant == 'abandoned' then
-        SetVehicleDirtLevel(entity, 12.0)
-        SetVehicleTyreBurst(entity, 0, true, 1000.0)
-    elseif variant == 'accident' then
-        SetVehicleEngineHealth(entity, 200.0)
-        SetVehicleBodyHealth(entity, 350.0)
-        SetVehicleDirtLevel(entity, 6.0)
-    elseif variant == 'illegal_parking' then
-        SetVehicleDirtLevel(entity, 2.0)
-    elseif variant == 'vip_recovery' then
-        SetVehicleDirtLevel(entity, 0.0)
+local function decorateAndExtras(call, vehicleEntity)
+    call.extras = {}
+    SetVehicleDoorsLocked(vehicleEntity, 2)
+    local v = call.variant
+
+    if v == 'abandoned' then
+        SetVehicleDirtLevel(vehicleEntity, 12.0)
+        SetVehicleTyreBurst(vehicleEntity, 0, true, 1000.0)
+        SetVehicleTyreBurst(vehicleEntity, 4, true, 1000.0)
+        SetVehicleEngineHealth(vehicleEntity, 400.0)
+
+    elseif v == 'illegal_parking' then
+        SetVehicleDirtLevel(vehicleEntity, 2.0)
+        local cx, cy, cz = call.coords.x, call.coords.y, call.coords.z + 1.5
+        local ticket = CreateObject(joaat('imp_prop_impexp_invoice_01a'), cx, cy, cz, true, true, false)
+        if ticket and ticket ~= 0 then
+            table.insert(call.extras, { type = 'ticket', entity = ticket, netId = NetworkGetNetworkIdFromEntity(ticket) })
+        end
+
+    elseif v == 'accident' then
+        SetVehicleEngineHealth(vehicleEntity, 200.0)
+        SetVehicleBodyHealth(vehicleEntity, 350.0)
+        SetVehicleDirtLevel(vehicleEntity, 6.0)
+        SetVehicleTyreBurst(vehicleEntity, 1, true, 1000.0)
+        local h = call.coords.w or 0.0
+        local px = call.coords.x + math.cos(math.rad(h + 90.0)) * 2.5
+        local py = call.coords.y + math.sin(math.rad(h + 90.0)) * 2.5
+        local ped = CreatePed(4, joaat('a_m_y_business_03'), px, py, call.coords.z, h + 180.0, true, true)
+        if ped and ped ~= 0 then
+            FreezeEntityPosition(ped, true)
+            table.insert(call.extras, { type = 'driver', entity = ped, netId = NetworkGetNetworkIdFromEntity(ped) })
+        end
+
+    elseif v == 'vip_recovery' then
+        SetVehicleDirtLevel(vehicleEntity, 0.0)
+        SetVehicleNumberPlateText(vehicleEntity, ('VIP%04d'):format(math.random(0, 9999)))
     end
 end
 
@@ -113,8 +136,16 @@ local function spawnTarget(call)
     local hash = joaat(call.model)
     local entity = CreateVehicleServerSetter(hash, 'automobile', call.coords.x, call.coords.y, call.coords.z, call.coords.w)
     if not entity or entity == 0 then return nil end
-    decorateForVariant(entity, call.variant)
+    decorateAndExtras(call, entity)
     return entity
+end
+
+local function buildExtrasPayload(call)
+    local out = {}
+    for _, ex in ipairs(call.extras or {}) do
+        out[#out+1] = { type = ex.type, netId = ex.netId }
+    end
+    return out
 end
 
 lib.callback.register('hbs-tow:server:acceptCall', function(src, callId)
@@ -141,6 +172,7 @@ lib.callback.register('hbs-tow:server:acceptCall', function(src, callId)
         xp        = call.xp,
         targetNet = call.targetNetId,
         impound   = Config.Locations.impound.point,
+        extras    = buildExtrasPayload(call),
     }
 end)
 
@@ -162,11 +194,21 @@ lib.callback.register('hbs-tow:server:getHistory', function(src)
     return recentJobs[src] or {}
 end)
 
-local function releaseCall(callId, deleteEntity)
+local function deleteExtras(call)
+    for _, ex in ipairs(call.extras or {}) do
+        if ex.entity and DoesEntityExist(ex.entity) then DeleteEntity(ex.entity) end
+    end
+    call.extras = nil
+end
+
+local function releaseCall(callId, deleteEntities)
     local call = activeCalls[callId]
     if not call then return end
-    if deleteEntity and call.targetEntity and DoesEntityExist(call.targetEntity) then
-        DeleteEntity(call.targetEntity)
+    if deleteEntities then
+        if call.targetEntity and DoesEntityExist(call.targetEntity) then
+            DeleteEntity(call.targetEntity)
+        end
+        deleteExtras(call)
     end
     activeCalls[callId] = nil
 end
@@ -245,5 +287,6 @@ AddEventHandler('onResourceStop', function(name)
         if c.targetEntity and DoesEntityExist(c.targetEntity) then
             DeleteEntity(c.targetEntity)
         end
+        deleteExtras(c)
     end
 end)

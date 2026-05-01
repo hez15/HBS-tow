@@ -8,13 +8,13 @@
 local STATE = { IDLE='IDLE', HEADING_PICKUP='HEADING_PICKUP', AT_PICKUP='AT_PICKUP', HOOKED='HOOKED', AT_IMPOUND='AT_IMPOUND' }
 
 local state    = STATE.IDLE
-local mission  = nil    -- accepted call data
+local mission  = nil
 local blip     = nil
-local targetTargets = nil  -- ox_target options handle for the mission target vehicle
-local truckTargets  = nil  -- ox_target options handle for the towtruck
+local targetTargets = nil
+local truckTargets  = nil
 
 function GetActiveMission() return mission end
-function GetMissionState() return state end
+function GetMissionState()  return state end
 
 local function clearBlip()
     if blip and DoesBlipExist(blip) then RemoveBlip(blip) end
@@ -65,16 +65,13 @@ local function attachToTruck(target)
     while not NetworkHasControlOfEntity(target) and tries < 20 do
         Wait(50); NetworkRequestControlOfEntity(target); tries = tries + 1
     end
-    if PerformHookAttach then
-        return PerformHookAttach(truck, target)
-    end
-    -- Fallback if attach.lua failed to load
+    if PerformHookAttach then return PerformHookAttach(truck, target) end
     AttachEntityToEntity(target, truck, 0, 0.0, -5.0, 1.0, 0.0, 0.0, 0.0, false, false, true, false, 20, true)
     return true
 end
 
 local function setupTargetOnVehicle(targetEntity)
-    local opts = {
+    exports.ox_target:addLocalEntity(targetEntity, {
         {
             name = 'hbs_tow_hook',
             icon = 'fa-solid fa-link',
@@ -97,22 +94,19 @@ local function setupTargetOnVehicle(targetEntity)
                 end
             end,
         },
-    }
-    exports.ox_target:addLocalEntity(targetEntity, opts)
+    })
     targetTargets = { entity = targetEntity, names = { 'hbs_tow_hook' } }
 end
 
 function setupTargetOnTruck(truck)
     if not truck or not DoesEntityExist(truck) then return end
-    local opts = {
+    exports.ox_target:addLocalEntity(truck, {
         {
             name = 'hbs_tow_drop',
             icon = 'fa-solid fa-flag-checkered',
             label = 'Detach & Complete',
             distance = 3.0,
-            canInteract = function()
-                return state == STATE.AT_IMPOUND
-            end,
+            canInteract = function() return state == STATE.AT_IMPOUND end,
             onSelect = function()
                 local target = mission and NetworkGetEntityFromNetworkId(mission.targetNet) or 0
                 if target ~= 0 then
@@ -122,9 +116,36 @@ function setupTargetOnTruck(truck)
                 TriggerServerEvent('hbs-tow:server:completeCall')
             end,
         },
-    }
-    exports.ox_target:addLocalEntity(truck, opts)
+    })
     truckTargets = { entity = truck, names = { 'hbs_tow_drop' } }
+end
+
+local function polishExtra(ex, targetNet)
+    CreateThread(function()
+        local tries = 0
+        while tries < 60 do
+            local entity = NetworkGetEntityFromNetworkId(ex.netId)
+            if entity ~= 0 and DoesEntityExist(entity) then
+                if ex.type == 'driver' then
+                    TaskStartScenarioInPlace(entity, 'WORLD_HUMAN_HANG_OUT_STREET', 0, true)
+                elseif ex.type == 'ticket' then
+                    local target = NetworkGetEntityFromNetworkId(targetNet)
+                    if target ~= 0 then
+                        NetworkRequestControlOfEntity(entity)
+                        AttachEntityToEntity(
+                            entity, target, 0,
+                            0.4, 0.7, 0.6,
+                            0.0, 0.0, 0.0,
+                            false, true, false, false, 1, true
+                        )
+                    end
+                end
+                return
+            end
+            Wait(1000)
+            tries = tries + 1
+        end
+    end)
 end
 
 RegisterNetEvent('hbs-tow:client:missionAccepted', function(call)
@@ -132,7 +153,14 @@ RegisterNetEvent('hbs-tow:client:missionAccepted', function(call)
     mission = call
     state   = STATE.HEADING_PICKUP
     setBlip(call.coords, ('Tow: %s'):format(call.label), 67, 5)
-    lib.notify({ title = 'Tow', description = ('New job: %s in %s'):format(call.label, call.district or 'LS'), type = 'inform' })
+    lib.notify({
+        title = 'Tow',
+        description = ('New job: %s in %s'):format(call.label, call.district or 'LS'),
+        type = 'inform',
+    })
+    if call.extras then
+        for _, ex in ipairs(call.extras) do polishExtra(ex, call.targetNet) end
+    end
 end)
 
 RegisterNetEvent('hbs-tow:client:missionEnded', function()
@@ -156,7 +184,6 @@ RegisterNetEvent('hbs-tow:client:missionCompleted', function(result)
     })
 end)
 
--- proximity tick
 CreateThread(function()
     while true do
         Wait(1000)
