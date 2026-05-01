@@ -27,6 +27,7 @@ server_scripts {
     'server/main.lua',
     'server/job.lua',
     'server/tablet.lua',
+    'server/rope.lua',
     'server/boot.lua',
 }
 
