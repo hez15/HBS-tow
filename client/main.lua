@@ -4,7 +4,18 @@ local spawnedTruck = nil
 function IsOnDuty() return onDuty end
 function GetSpawnedTruck() return spawnedTruck end
 
+local function hasRequiredJob()
+    local required = Config.Job.requiredJob
+    if not required or required == '' then return true end
+    local data = exports.qbx_core:GetPlayerData()
+    return data and data.job and data.job.name == required
+end
+
 local function setDuty(state)
+    if state and not hasRequiredJob() then
+        lib.notify({ title = 'Tow', description = 'You are not employed as a tow operator.', type = 'error' })
+        return
+    end
     onDuty = state and true or false
     TriggerEvent('hbs-tow:client:dutyChanged', onDuty)
     lib.notify({
@@ -61,13 +72,16 @@ CreateThread(function()
                 name = 'hbs_tow_duty',
                 icon = 'fa-solid fa-id-badge',
                 label = 'Toggle Duty',
+                canInteract = function() return hasRequiredJob() end,
                 onSelect = function() setDuty(not onDuty) end,
             },
             {
                 name = 'hbs_tow_spawn',
                 icon = 'fa-solid fa-truck-pickup',
                 label = 'Take out tow truck',
-                canInteract = function() return onDuty and (not spawnedTruck or not DoesEntityExist(spawnedTruck)) end,
+                canInteract = function()
+                    return hasRequiredJob() and onDuty and (not spawnedTruck or not DoesEntityExist(spawnedTruck))
+                end,
                 onSelect = spawnTruck,
             },
             {
@@ -92,6 +106,10 @@ end)
 
 -- ox_inventory item handler for tow_tablet
 exports('useTowTablet', function()
+    if not hasRequiredJob() then
+        lib.notify({ title = 'Tow', description = 'Only tow operators can use this tablet.', type = 'error' })
+        return
+    end
     if not onDuty then
         lib.notify({ title = 'Tow', description = 'You must be on duty to use the tablet.', type = 'error' })
         return

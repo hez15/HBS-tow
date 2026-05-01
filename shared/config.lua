@@ -5,7 +5,7 @@ Config.Debug = false
 -- Resource integrations
 Config.MDTResource = 'hbs-mdt'
 Config.XPResource  = 'nonstop-xp'
-Config.XPTrack     = 'driving'
+Config.XPTrack     = 'towing'
 Config.PayoutPerk  = 'jobPayoutMult'
 
 -- Theme (mirrored in NUI for consistency)
@@ -15,6 +15,7 @@ Config.Theme = {
 
 -- Tow job
 Config.Job = {
+    requiredJob     = 'tow',         -- qbx job name required to be on duty / accept calls
     maxActiveCalls  = 3,
     callTTLSeconds  = 600,
     spawnRadiusMin  = 100.0,
@@ -26,11 +27,11 @@ Config.Job = {
 -- Tow rope item (utility, any player). Tool, not consumed on use.
 Config.Rope = {
     itemName       = 'tow_rope',
-    maxSpeed       = 18.0,           -- m/s, ~40 mph
+    maxSpeed       = 18.0,
     searchDistance = 6.0,
-    attachOffset   = vec3(0.0, -5.0, 0.5), -- target relative to puller (rear-behind)
+    attachOffset   = vec3(0.0, -5.0, 0.5),
     propModel      = 'prop_air_chain_01a',
-    propOffset     = vec3(0.0, -2.5, 0.0), -- chain prop attached to puller rear
+    propOffset     = vec3(0.0, -2.5, 0.0),
 }
 
 -- Wheel boot (police)

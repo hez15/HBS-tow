@@ -5,6 +5,14 @@ local activeCalls   = {}    -- callId -> call
 local playerMission = {}    -- src -> callId
 local recentJobs    = {}    -- src -> array of { variant, label, pay, ts }
 
+local function hasRequiredJob(src)
+    local required = Config.Job.requiredJob
+    if not required or required == '' then return true end
+    local player = exports.qbx_core:GetPlayer(src)
+    if not player then return false end
+    return player.PlayerData.job and player.PlayerData.job.name == required
+end
+
 local function getDriverLevel(src)
     if GetResourceState(Config.XPResource) ~= 'started' then return 0 end
     local track = exports[Config.XPResource]:GetTrack(src, Config.XPTrack)
@@ -71,6 +79,7 @@ CreateThread(function()
 end)
 
 lib.callback.register('hbs-tow:server:listCalls', function(src)
+    if not hasRequiredJob(src) then return {} end
     local now = os.time()
     local level = getDriverLevel(src)
     local out = {}
@@ -149,6 +158,7 @@ local function buildExtrasPayload(call)
 end
 
 lib.callback.register('hbs-tow:server:acceptCall', function(src, callId)
+    if not hasRequiredJob(src) then return false, 'not a tow operator' end
     local call = activeCalls[callId]
     if not call or call.claimedBy then return false, 'unavailable' end
     if (call.minLevel or 0) > getDriverLevel(src) then return false, 'level too low' end
@@ -224,6 +234,7 @@ end)
 
 RegisterNetEvent('hbs-tow:server:completeCall', function()
     local src = source
+    if not hasRequiredJob(src) then return end
     local callId = playerMission[src]
     if not callId then return end
     local call = activeCalls[callId]
