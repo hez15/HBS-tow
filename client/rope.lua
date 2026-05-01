@@ -1,0 +1,2 @@
+-- tow_rope item: rigid AttachEntityToEntity + visual rope prop between bumpers.
+-- Implemented in commit #3.

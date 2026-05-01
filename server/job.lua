@@ -1,0 +1,1 @@
+-- Tow job server: mission generation, payout, XP, dedupe. Implemented in commit #4.

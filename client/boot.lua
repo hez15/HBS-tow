@@ -1,0 +1,2 @@
+-- Wheel boot client logic: stream-in re-apply, immobilization on apply.
+-- Implemented in commit #2.
