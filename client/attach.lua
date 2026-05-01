@@ -1,0 +1,2 @@
+-- Hook-style AttachEntityToEntity for the depot towtruck.
+-- Implemented in commit #4.
