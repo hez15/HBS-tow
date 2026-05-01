@@ -1,4 +1,8 @@
 CreateThread(function()
+    local mode = GetConvar('onesync', 'off')
+    if mode == 'off' then
+        print('[hbs-tow] WARNING: OneSync is off. Server-side vehicle spawning (CreateVehicleServerSetter) will fail.')
+    end
     if GetResourceState(Config.MDTResource) == 'missing' then
         print(('[hbs-tow] notice: MDT resource %s not present. Boot exports still available.'):format(Config.MDTResource))
     end
