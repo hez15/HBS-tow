@@ -1,8 +1,9 @@
--- Tow job server: mission generation, claim/payout, XP, stats.
+-- Tow job server: mission generation, claim/payout, XP, stats, history.
 
 local nextCallId    = 1
 local activeCalls   = {}    -- callId -> call
 local playerMission = {}    -- src -> callId
+local recentJobs    = {}    -- src -> array of { variant, label, pay, ts }
 
 local function getDriverLevel(src)
     if GetResourceState(Config.XPResource) ~= 'started' then return 0 end
@@ -19,11 +20,9 @@ local function weightedPick(variants, level)
     end
     if #pool == 0 then return nil end
     return pool[math.random(#pool)]
- end
+end
 
 local function generateCall()
-    -- Generate against the highest tier so all variants appear in the pool;
-    -- per-player gating happens at accept time.
     local variantKey = weightedPick(Config.MissionVariants, 100)
     if not variantKey then return nil end
     local variant = Config.MissionVariants[variantKey]
@@ -71,7 +70,7 @@ CreateThread(function()
     end
 end)
 
-local function listAvailableForPlayer(src)
+lib.callback.register('hbs-tow:server:listCalls', function(src)
     local now = os.time()
     local level = getDriverLevel(src)
     local out = {}
@@ -92,10 +91,6 @@ local function listAvailableForPlayer(src)
         end
     end
     return out
-end
-
-lib.callback.register('hbs-tow:server:listCalls', function(src)
-    return listAvailableForPlayer(src)
 end)
 
 local function decorateForVariant(entity, variant)
@@ -147,6 +142,24 @@ lib.callback.register('hbs-tow:server:acceptCall', function(src, callId)
         targetNet = call.targetNetId,
         impound   = Config.Locations.impound.point,
     }
+end)
+
+lib.callback.register('hbs-tow:server:getActive', function(src)
+    local callId = playerMission[src]
+    if not callId then return nil end
+    local c = activeCalls[callId]
+    if not c then return nil end
+    return {
+        id       = c.id,
+        variant  = c.variant,
+        label    = c.label,
+        district = c.district,
+        basePay  = c.basePay,
+    }
+end)
+
+lib.callback.register('hbs-tow:server:getHistory', function(src)
+    return recentJobs[src] or {}
 end)
 
 local function releaseCall(callId, deleteEntity)
@@ -206,6 +219,11 @@ RegisterNetEvent('hbs-tow:server:completeCall', function()
         ]], { cid, pay })
     end
 
+    local list = recentJobs[src] or {}
+    table.insert(list, 1, { variant = call.variant, label = call.label, pay = pay, ts = os.time() })
+    while #list > 10 do table.remove(list) end
+    recentJobs[src] = list
+
     releaseCall(callId, true)
     playerMission[src] = nil
     TriggerClientEvent('hbs-tow:client:missionCompleted', src, { pay = pay, xp = call.xp })
@@ -218,11 +236,12 @@ AddEventHandler('playerDropped', function()
         releaseCall(callId, true)
         playerMission[src] = nil
     end
+    recentJobs[src] = nil
 end)
 
 AddEventHandler('onResourceStop', function(name)
     if name ~= GetCurrentResourceName() then return end
-    for id, c in pairs(activeCalls) do
+    for _, c in pairs(activeCalls) do
         if c.targetEntity and DoesEntityExist(c.targetEntity) then
             DeleteEntity(c.targetEntity)
         end
