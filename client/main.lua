@@ -80,7 +80,7 @@ CreateThread(function()
                 icon = 'fa-solid fa-truck-pickup',
                 label = 'Take out tow truck',
                 canInteract = function()
-                    return hasRequiredJob() and onDuty and (not spawnedTruck or not DoesEntityExist(spawnedTruck))
+                    return hasRequiredJob() and (not spawnedTruck or not DoesEntityExist(spawnedTruck))
                 end,
                 onSelect = spawnTruck,
             },
@@ -108,10 +108,6 @@ end)
 exports('useTowTablet', function()
     if not hasRequiredJob() then
         lib.notify({ title = 'Tow', description = 'Only tow operators can use this tablet.', type = 'error' })
-        return
-    end
-    if not onDuty then
-        lib.notify({ title = 'Tow', description = 'You must be on duty to use the tablet.', type = 'error' })
         return
     end
     TriggerEvent('hbs-tow:client:openTablet')
